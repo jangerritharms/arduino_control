@@ -20,6 +20,8 @@ from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
 PLOTS = 4
+LIMITS = {'counter': (0, 1000), 
+          'yaxis': (0, 1023)}
 
 class Plotter(FigureCanvas):
     """A canvas that updates itself every second with a new plot.
@@ -49,6 +51,7 @@ class Plotter(FigureCanvas):
         # Create data array
         self.x = []
         self.y = []
+        self.limits = ()
     
         # create a line to update consequently
         self.line, = self.axes.plot(self.x, self.y)
@@ -57,15 +60,29 @@ class Plotter(FigureCanvas):
         self.axes.set_xbound(-101, 1)
     
     def update_figure(self, y):
+        redraw = False
         # update data
         self.y = y
         self.x = np.linspace(-len(y)/10., 0, len(y))
         self.line.set_xdata(self.x)
         self.line.set_ydata(self.y)
-        self.axes.set_ybound(min(self.y)-1, max(self.y)+1)
+        if min(self.y)<self.limits[0]: 
+            self.limits = (self.limits[0]-0.5*self.limits[1]-self.limits[0], self.limits[1])
+            self.axes.set_ybound(self.limits)
+            redraw = True
+        if max(self.y)>self.limits[1]: 
+            self.limits = (self.limits[0], self.limits[1]+0.5*self.limits[1]-self.limits[0])
+            self.axes.set_ybound(self.limits)
+            redraw = True
         self.axes.draw_artist(self.axes.patch)
         self.axes.draw_artist(self.line)
-        self.repaint()
+
+        # repaint is much faster but does not redraw the axis labels and ticks
+        if not redraw:
+            self.repaint()
+        else: 
+            print 'hello world'
+            self.draw()
 
 class ApplicationWindow(QtGui.QMainWindow):
     def __init__(self, parentQuit):
@@ -128,6 +145,10 @@ class ApplicationWindow(QtGui.QMainWindow):
     def update_figure(self):
         for i in range(PLOTS):
             self.plotter[i].axes.set_ylabel(self.series_chooser[i].currentText())
+            if self.series_chooser[i].currentText():
+                self.plotter[i].limits = LIMITS[str(self.series_chooser[i].currentText())]
+                self.plotter[i].axes.set_ybound(self.plotter[i].limits)
+                self.plotter[i].draw()
 
     def fileQuit(self):
         self.parentQuit()
