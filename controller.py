@@ -11,7 +11,7 @@ from __future__ import unicode_literals
 import sys
 import os
 import random
-from time import sleep
+from time import sleep, time
 from datetime import datetime
 from PyQt4 import QtGui, QtCore
 
@@ -52,6 +52,7 @@ class Plotter(FigureCanvas):
     
         # create a line to update consequently
         self.line, = self.axes.plot(self.x, self.y)
+        self.background = self.copy_from_bbox(self.axes.bbox)
         self.axes.set_xlabel("Time")
         self.axes.set_xbound(-101, 1)
     
@@ -62,7 +63,9 @@ class Plotter(FigureCanvas):
         self.line.set_xdata(self.x)
         self.line.set_ydata(self.y)
         self.axes.set_ybound(min(self.y)-1, max(self.y)+1)
-        self.draw()
+        self.axes.draw_artist(self.axes.patch)
+        self.axes.draw_artist(self.line)
+        self.repaint()
 
 class ApplicationWindow(QtGui.QMainWindow):
     def __init__(self, parentQuit):
@@ -84,33 +87,36 @@ class ApplicationWindow(QtGui.QMainWindow):
         self.help_menu.addAction('&About', self.about)
 
         # Create all the required widgets and layouts
-        self.plotters = []
-        self.series_choosers = []
+        self.plotter = []
+        self.series_chooser = []
+        self.series_label = []
         self.main_widget = QtGui.QWidget(self)
         layout = QtGui.QGridLayout(self.main_widget)
         sub_layout = QtGui.QGridLayout(self.main_widget)
-        self.plotter = Plotter(100, parent=self.main_widget, width=5, height=4, dpi=100)
+        for i in range(PLOTS):
+            self.plotter.append(Plotter(100, parent=self.main_widget, width=5, height=4, dpi=100))
+            self.series_label.append(QtGui.QLabel(self.main_widget))
+            self.series_label[i].setText("Series %d: "%i)
+            self.series_chooser.append(QtGui.QComboBox(self.main_widget))
+            self.series_chooser[i].currentIndexChanged.connect(self.update_figure)
         self.slider = QtGui.QSlider(self.main_widget)
         self.port_chooser = QtGui.QComboBox(self.main_widget)
-        self.series_label = QtGui.QLabel(self.main_widget)
-        self.series_label.setText("Series: ")
-        self.series_chooser = QtGui.QComboBox(self.main_widget)
-        self.series_chooser.currentIndexChanged.connect(self.update_figure)
         self.status = QtGui.QLabel(self.main_widget)
         self.slider.setOrientation(QtCore.Qt.Horizontal)
         self.connecter = QtGui.QPushButton("&Connect", self.main_widget)
         self.scanner = QtGui.QPushButton("&Rescan", self.main_widget)
 
         # Adding the components to the layout
-        layout.addWidget(self.status, 0, 0, 1, 1)
-        layout.addWidget(self.scanner, 0, 1, 1, 1);
-        layout.addWidget(self.port_chooser, 1, 0, 1, 1)
-        layout.addWidget(self.connecter, 1, 1, 1, 1)
-        layout.addWidget(self.plotter, 2, 0)
-        layout.addWidget(self.slider, 3, 0, 1, 1)
-        sub_layout.addWidget(self.series_label, 0, 0, 1, 1)
-        sub_layout.addWidget(self.series_chooser, 0, 1, 1, 1)
-        layout.addLayout(sub_layout, 2, 1, 1, 1)
+        layout.addWidget(self.status, 0, 0, 1, 1 if PLOTS<=1 else  2)
+        layout.addWidget(self.scanner, 0, 1 if PLOTS<=1 else  2, 1, 1);
+        layout.addWidget(self.port_chooser, 1, 0, 1, 1 if PLOTS<=1 else  2)
+        layout.addWidget(self.connecter, 1, 1 if PLOTS<=1 else  2, 1, 1)
+        for i in range(PLOTS):
+            layout.addWidget(self.plotter[i], 2+i/2, i%2)
+            sub_layout.addWidget(self.series_label[i], i, 0, 1, 1)
+            sub_layout.addWidget(self.series_chooser[i], i, 1, 1, 1)
+        layout.addWidget(self.slider, 2+PLOTS/2+PLOTS%2, 0, 1, 1 if PLOTS<=1 else  2)
+        layout.addLayout(sub_layout, 2, 1 if PLOTS<=1 else  2, PLOTS/2+PLOTS%2, 1)
 
         self.main_widget.setFocus()
         self.setCentralWidget(self.main_widget)
@@ -120,7 +126,8 @@ class ApplicationWindow(QtGui.QMainWindow):
         self.test = 0
     
     def update_figure(self):
-        self.plotter.axes.set_ylabel(self.series_chooser.currentText())
+        for i in range(PLOTS):
+            self.plotter[i].axes.set_ylabel(self.series_chooser[i].currentText())
 
     def fileQuit(self):
         self.parentQuit()
@@ -175,7 +182,8 @@ class Controller:
 
         for key in serie_names:
             if key not in self.series:
-                self.window.series_chooser.addItem(key)
+                for i in range(PLOTS):
+                    self.window.series_chooser[i].addItem(key)
             self.series[key] = []
 
         self.window.status.setText("Connected");
@@ -242,13 +250,14 @@ class Controller:
         timer.start(drawInterval)
 
     def update_figure(self):
-        if not self.window.series_chooser.currentText() or not self.com.connected:
+        if not self.com.connected:
             return
         self.saved = False;
-        if (len(self.series[str(self.window.series_chooser.currentText())])<1000):
-            self.window.plotter.update_figure(self.series[str(self.window.series_chooser.currentText())])
-        else:
-            self.window.plotter.update_figure(self.series[str(self.window.series_chooser.currentText())][-1000:])
+        for i in range(PLOTS):
+            if (len(self.series[str(self.window.series_chooser[i].currentText())])<1000):
+                self.window.plotter[i].update_figure(self.series[str(self.window.series_chooser[i].currentText())])
+            else:
+                self.window.plotter[i].update_figure(self.series[str(self.window.series_chooser[i].currentText())][-1000:])
 
     def run(self):
         try:
