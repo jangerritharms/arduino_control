@@ -15,6 +15,10 @@ from time import sleep, time
 from datetime import datetime
 from PyQt4 import QtGui, QtCore
 
+# import communicator classes
+from communicator import Arduino, Bridge
+
+# Plotting and numerical calculation imports
 import numpy as np
 from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -22,6 +26,10 @@ from matplotlib.figure import Figure
 PLOTS = 4
 LIMITS = {'counter': (0, 1000), 
           'yaxis': (0, 1023)}
+COMS = [{'name': 'arduino', 'type': Arduino}, 
+        #{'name': 'thrust_bridge', 'type': Bridge}, 
+        #{'name': 'lift_bridge', 'type': Bridge} 
+        ]
 
 class Plotter(FigureCanvas):
     """A canvas that updates itself every second with a new plot.
@@ -81,7 +89,6 @@ class Plotter(FigureCanvas):
         if not redraw:
             self.repaint()
         else: 
-            print 'hello world'
             self.draw()
 
 class ApplicationWindow(QtGui.QMainWindow):
@@ -107,37 +114,68 @@ class ApplicationWindow(QtGui.QMainWindow):
         self.plotter = []
         self.series_chooser = []
         self.series_label = []
+        self.port_chooser = {}
+        self.com_status = {}
+        self.com_label = {}
+
         self.main_widget = QtGui.QWidget(self)
-        layout = QtGui.QGridLayout(self.main_widget)
-        sub_layout = QtGui.QGridLayout(self.main_widget)
+        layout = QtGui.QVBoxLayout(self.main_widget)
+        com_row = QtGui.QHBoxLayout(self.main_widget)
+
+        # Create plots
         for i in range(PLOTS):
             self.plotter.append(Plotter(100, parent=self.main_widget, width=5, height=4, dpi=100))
             self.series_label.append(QtGui.QLabel(self.main_widget))
             self.series_label[i].setText("Series %d: "%i)
             self.series_chooser.append(QtGui.QComboBox(self.main_widget))
             self.series_chooser[i].currentIndexChanged.connect(self.update_figure)
-        self.slider = QtGui.QSlider(self.main_widget)
-        self.port_chooser = QtGui.QComboBox(self.main_widget)
-        self.status = QtGui.QLabel(self.main_widget)
-        self.slider.setOrientation(QtCore.Qt.Horizontal)
+
+        # self.slider = QtGui.QSlider(self.main_widget)
+        for dev in COMS:
+            self.com_label[dev['name']] = QtGui.QLabel(self.main_widget)
+            self.com_label[dev['name']].setText(dev['name']+' status: ')
+            self.port_chooser[dev['name']] = QtGui.QComboBox(self.main_widget)
+            self.com_status[dev['name']] = QtGui.QLabel(self.main_widget)
+            self.com_status[dev['name']].setText("Unkown")
+
         self.connecter = QtGui.QPushButton("&Connect", self.main_widget)
         self.scanner = QtGui.QPushButton("&Rescan", self.main_widget)
 
         # Adding the components to the layout
-        layout.addWidget(self.status, 0, 0, 1, 1 if PLOTS<=1 else  2)
-        layout.addWidget(self.scanner, 0, 1 if PLOTS<=1 else  2, 1, 1);
-        layout.addWidget(self.port_chooser, 1, 0, 1, 1 if PLOTS<=1 else  2)
-        layout.addWidget(self.connecter, 1, 1 if PLOTS<=1 else  2, 1, 1)
-        for i in range(PLOTS):
-            layout.addWidget(self.plotter[i], 2+i/2, i%2)
-            sub_layout.addWidget(self.series_label[i], i, 0, 1, 1)
-            sub_layout.addWidget(self.series_chooser[i], i, 1, 1, 1)
-        layout.addWidget(self.slider, 2+PLOTS/2+PLOTS%2, 0, 1, 1 if PLOTS<=1 else  2)
-        layout.addLayout(sub_layout, 2, 1 if PLOTS<=1 else  2, PLOTS/2+PLOTS%2, 1)
+        for dev in COMS:
+            com_layout = QtGui.QGridLayout(self.main_widget)
+            com_layout.addWidget(self.com_label[dev['name']], 0, 0)
+            com_layout.addWidget(self.com_status[dev['name']], 0, 1)
+            com_layout.addWidget(self.port_chooser[dev['name']], 1, 0, 1, 2)
+            com_row.addLayout(com_layout)
+
+        layout.addLayout(com_row)
+
+        for i in range(int(np.sqrt(PLOTS))):
+            j=0
+            plot_row = QtGui.QHBoxLayout(self.main_widget)
+            plot_layout = QtGui.QGridLayout(self.main_widget)
+            while j < int(np.sqrt(PLOTS)):
+                plot_layout.addWidget(self.series_label[i*int(np.sqrt(PLOTS))+j], j, 0)
+                plot_layout.addWidget(self.series_chooser[i*int(np.sqrt(PLOTS))+j], j, 1)
+                plot_row.addWidget(self.plotter[i*int(np.sqrt(PLOTS))+j])
+                j += 1
+            plot_row.addLayout(plot_layout)
+            layout.addLayout(plot_row)
+        plot_row = QtGui.QHBoxLayout(self.main_widget)
+        plot_layout = QtGui.QGridLayout(self.main_widget)
+        for i in range(PLOTS-int(np.sqrt(PLOTS))**2):
+            plot_layout.addWidget(self.series_label[i], i, 0)
+            plot_layout.addWidget(self.series_chooser[i], i, 1)
+            plot_row.addWidget(self.plotter[i])
+        plot_row.addLayout(plot_layout)
+        layout.addLayout(plot_row)
+        layout.addWidget(self.scanner)
+        layout.addWidget(self.connecter)
 
         self.main_widget.setFocus()
         self.setCentralWidget(self.main_widget)
-          
+ 
         # Create data array
         self.x = np.linspace(-100, 0, 100/100*1000)
         self.test = 0
@@ -166,7 +204,6 @@ class Controller:
     """Parent class for all other components. Will create the window, initialize Plotter and Communicater module and get all the Settings"""
 
     def __init__(self):
-        
 
         # Create qt context and window
         self.qApp = QtGui.QApplication(sys.argv)
@@ -176,18 +213,27 @@ class Controller:
         self.window.show()
         self.window.raise_()
 
+        #self.arduino = Arduino(self.window)
+        #self.thrust_bridge = Bridge()
+        #self.lift_bridge = Bridge()
+
+        # Create the communicators
+        self.coms = {}
+        for com in COMS:
+            self.coms[com['name']] = com['type']()
+
+        # Connecting buttons to functions
+        self.window.connecter.clicked.connect(self.connect)
+        self.window.scanner.clicked.connect(self.scan)
+
+        # Structures to hold information
         self.port_list = {}
         self.series = {}
         self.saved = True
 
-        # Check if Arduino is connected and open the Connector
-        self.com = Communicator(self.window)
-        self.window.connecter.clicked.connect(self.connect)
-        self.window.scanner.clicked.connect(self.scan)
-
+        # Scan for connected devices
         self.scan()
 
-        # Determine the fields from Arduino
         self.x = np.linspace(-100, 0, 1000)
         self.test = 0 
 
@@ -195,19 +241,21 @@ class Controller:
 
     def connect(self):
 
-        self.window.status.setText("Connecting ...")
+        for dev in COMS:
+            self.window.com_status[dev['name']].setText("Connecting ...")
 
-        port = self.port_list[str(self.window.port_chooser.currentText())]
-        
-        serie_names = self.com.init_connection(port)
+            port = self.port_list[str(self.window.port_chooser[dev['name']].currentText())]
+     
+            serie_names = self.coms[dev['name']].connect(port)
 
-        for key in serie_names:
-            if key not in self.series:
-                for i in range(PLOTS):
-                    self.window.series_chooser[i].addItem(key)
-            self.series[key] = []
+            for key in serie_names:
+                if key not in self.series:
+                    for i in range(PLOTS):
+                        self.window.series_chooser[i].addItem(key)
+                self.series[key] = []
 
-        self.window.status.setText("Connected");
+            self.window.com_status[dev['name']].setText("Connected");
+
         self.window.connecter.setText("&Start Measurement");
         self.window.connecter.clicked.disconnect()
         self.window.connecter.clicked.connect(self.start_measurement)
@@ -220,9 +268,10 @@ class Controller:
             elif result == QtGui.QMessageBox.Discard: pass
             else: return
 
-        self.com.start_measurement()
+        for dev in COMS:
+            self.coms[dev['name']].start_measurement()
+            self.window.com_status[dev['name']].setText("Measuring");
 
-        self.window.status.setText("Measuring");
         self.window.connecter.setText("&Disconnect");
         self.window.connecter.clicked.disconnect()
         self.window.connecter.clicked.connect(self.disconnect)
@@ -230,9 +279,9 @@ class Controller:
 
     def disconnect(self):
 
-        self.com.disconnect()
-
-        self.window.status.setText("Disconnected");
+        for dev in COMS:
+            self.coms[dev['name']].disconnect()
+            self.window.com_status[dev['name']].setText("Disconnected");
         self.window.connecter.setText("&Connect");
         self.window.connecter.clicked.disconnect()
         self.window.connecter.clicked.connect(self.connect)
@@ -240,30 +289,32 @@ class Controller:
 
     def scan(self):
 
-        self.window.status.setText("&Scanning ... ")
-        self.window.status.setStyleSheet("QLabel { background-color: yellow; color: white; padding-left: 5px}")
+        for dev in COMS:
+            self.window.com_status[dev['name']].setText("&Scanning ... ")
+            self.window.com_status[dev['name']].setStyleSheet("QLabel { background-color: yellow; color: white; padding-left: 5px}")
 
-        QtGui.QApplication.processEvents()
+            QtGui.QApplication.processEvents()
 
-        self.port_list = self.com.scan()
+            self.port_list = self.coms[dev['name']].scan()
 
-        for name in self.port_list:
-            self.window.port_chooser.addItem(name)
+            for name in self.port_list:
+                self.window.port_chooser[dev['name']].addItem(name)
 
-        # Print status
-        if len(self.port_list)>0:
-            self.window.status.setText("%d devices found. Ready."%len(self.port_list))
-            self.window.status.setStyleSheet("QLabel { background-color: green; color: white; padding-left: 5px}")
-        else:
-            self.window.status.setText("No Arduino found, please connect one via USB.")
-            self.window.status.setStyleSheet("QLabel { background-color: red; color: white; padding-left: 5px}")
+            # Print status
+            if len(self.port_list)>0:
+                self.window.com_status[dev['name']].setText("%d devices found. Ready."%len(self.port_list))
+                self.window.com_status[dev['name']].setStyleSheet("QLabel { background-color: green; color: white; padding-left: 5px}")
+            else:
+                self.window.com_status[dev['name']].setText("No Arduino found, please connect one via USB.")
+                self.window.com_status[dev['name']].setStyleSheet("QLabel { background-color: red; color: white; padding-left: 5px}")
 
 
     def initializeMainLoop(self, receiveInterval, sendInterval, drawInterval):
         # Start getting information from the communicator
-        timer = QtCore.QTimer(self.window)
-        timer.timeout.connect(lambda: self.com.receive(self.series))
-        timer.start(receiveInterval)
+        for dev in COMS:
+            timer = QtCore.QTimer(self.window)
+            timer.timeout.connect(lambda: self.coms[dev['name']].receive(self.series))
+            timer.start(receiveInterval)
 
         # Set update interval for drawing the data
         timer = QtCore.QTimer(self.window)
@@ -271,8 +322,9 @@ class Controller:
         timer.start(drawInterval)
 
     def update_figure(self):
-        if not self.com.connected:
-            return
+        for dev in COMS:
+            if not self.coms[dev['name']].connected:
+                return
         self.saved = False;
         for i in range(PLOTS):
             if (len(self.series[str(self.window.series_chooser[i].currentText())])<1000):
@@ -298,7 +350,6 @@ class Controller:
         import csv
         try:
             fname = QtGui.QFileDialog.getSaveFileName(self.window, 'Save Results', os.path.dirname(os.path.abspath(__file__)))
-            
             writer = csv.writer(open(fname, 'wb'))
         except IOError:
             writer = csv.writer(open('result_%s.csv'%(datetime.now()), 'wb'))
@@ -307,85 +358,6 @@ class Controller:
         self.saved = True
 
 
-class Communicator:
-    """Class that communicates with the arduino board"""
-
-    def __init__(self, window):
-
-        self.connected = False
-        self.serie_names = []
-
-
-    def scan(self):
-
-        # get a list of all usb serial devices 
-        import subprocess
-        import serial.tools.list_ports
-        from sys import platform as _platform
-
-        # For linux we first call lsusb to get descriptions of the connected
-        # devices, next get all serial ports and find the intersection
-        # between the two arrays while checking for the string Arduino
-        if _platform == "linux" or _platform=="linux2":
-            usb_devices = subprocess.check_output("lsusb", shell=True)
-            ids = [dev.split()[5] for dev in usb_devices.split('\n') if dev]
-            descriptions = [' '.join(dev.split()[6:]) for dev in usb_devices.split('\n') if dev]
-            all_ports = serial.tools.list_ports.comports()
-            port_list = dict([(description, port[0]) for id, description in zip(ids, descriptions) for port in all_ports if id in port[2] and 'Arduino' in description])
- 
-        return port_list
-            
-
-    def init_connection(self, port):
-
-        import serial
-        try:
-            self.ser = serial.Serial(port, 9600)
-            self.ser.flush()
-        except OSError:
-            print "Port is not valid anymore"
-            self.scan()
-
-        # Wait for handshake with the arduino
-        self.wait_for_message("series")
-        self.serie_names = self.line.split()
-        self.serie_names.pop(0)
-
-        return self.serie_names
- 
-
-    def start_measurement(self):
-
-        sleep(1.0)
-        self.ser.write("go".encode())
-        self.wait_for_message("go")
-
-        self.connected = True
-
-
-    def wait_for_message(self, message):
-        self.line = ''
-        while True:
-            self.line = self.ser.readline()
-            if len(self.line)>2 and self.line.split()[0] == message:
-                break;
-
-    def disconnect(self):
-        sleep(1.0)
-        self.ser.write("done".encode())
-        sleep(1.0)
-        self.wait_for_message("done")
-        self.ser.flush()
-        self.ser.close()
-        self.connected = False
-
-    def receive(self, series):
-        valid_lines = 0
-        while self.connected and valid_lines < len(self.serie_names):
-            line = self.ser.readline()
-            if len(line)>2:
-                series[self.serie_names[valid_lines]].append(float(line))
-                valid_lines += 1
 
 if __name__=="__main__":
     c = Controller()
