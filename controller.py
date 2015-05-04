@@ -25,9 +25,13 @@ from matplotlib.figure import Figure
 
 PLOTS = 4
 LIMITS = {'counter': (0, 1000), 
-          'yaxis': (0, 1023)}
-COMS = [{'name': 'arduino', 'type': Arduino}, 
-        #{'name': 'thrust_bridge', 'type': Bridge}, 
+          'yaxis': (0, 1023), 
+          'force_0': (-0.1, 0.1), 
+          'force_1': (-0.1, 0.1), 
+          'force_2': (-0.1, 0.1), 
+          'force_3': (-0.1, 0.1)}
+COMS = [{'name': 'thrust_bridge', 'type': Bridge},
+        {'name': 'arduino', 'type': Arduino},
         #{'name': 'lift_bridge', 'type': Bridge} 
         ]
 
@@ -74,11 +78,11 @@ class Plotter(FigureCanvas):
         self.x = np.linspace(-len(y)/10., 0, len(y))
         self.line.set_xdata(self.x)
         self.line.set_ydata(self.y)
-        if min(self.y)<self.limits[0]: 
+        if self.y and min(self.y)<self.limits[0]: 
             self.limits = (self.limits[0]-0.5*self.limits[1]-self.limits[0], self.limits[1])
             self.axes.set_ybound(self.limits)
             redraw = True
-        if max(self.y)>self.limits[1]: 
+        if self.y and max(self.y)>self.limits[1]: 
             self.limits = (self.limits[0], self.limits[1]+0.5*self.limits[1]-self.limits[0])
             self.axes.set_ybound(self.limits)
             redraw = True
@@ -219,17 +223,27 @@ class Controller:
 
         # Create the communicators
         self.coms = {}
-        for com in COMS:
+
+        # Structures to hold information
+        self.saved = True
+        self.port_list = {}
+        self.series = {}
+
+        self.timers = []
+
+        for i, com in enumerate(COMS):
             self.coms[com['name']] = com['type']()
+            self.timers.append(QtCore.QTimer(self.window))
+
+        receive_funcs = [self.receive(self.coms['arduino']), self.receive(self.coms['thrust_bridge'])]
+
+        for i in range(len(self.timers)):
+            self.timers[-1].timeout.connect(receive_funcs[i])
 
         # Connecting buttons to functions
         self.window.connecter.clicked.connect(self.connect)
         self.window.scanner.clicked.connect(self.scan)
 
-        # Structures to hold information
-        self.port_list = {}
-        self.series = {}
-        self.saved = True
 
         # Scan for connected devices
         self.scan()
@@ -237,14 +251,13 @@ class Controller:
         self.x = np.linspace(-100, 0, 1000)
         self.test = 0 
 
-        self.initializeMainLoop(100, 100, 100)
 
     def connect(self):
 
         for dev in COMS:
             self.window.com_status[dev['name']].setText("Connecting ...")
 
-            port = self.port_list[str(self.window.port_chooser[dev['name']].currentText())]
+            port = self.port_list[dev['name']][str(self.window.port_chooser[dev['name']].currentText())]
      
             serie_names = self.coms[dev['name']].connect(port)
 
@@ -268,6 +281,7 @@ class Controller:
             elif result == QtGui.QMessageBox.Discard: pass
             else: return
 
+        self.initializeMainLoop(100, 100, 100)
         for dev in COMS:
             self.coms[dev['name']].start_measurement()
             self.window.com_status[dev['name']].setText("Measuring");
@@ -286,6 +300,8 @@ class Controller:
         self.window.connecter.clicked.disconnect()
         self.window.connecter.clicked.connect(self.connect)
 
+    def receive(self, com):
+        return lambda: com.receive(self.series)
 
     def scan(self):
 
@@ -298,7 +314,6 @@ class Controller:
             self.port_list[dev['name']] = self.coms[dev['name']].scan()
 
             for name in self.port_list[dev['name']]:
-                print "name {0} port_chooser {1}".format(name, self.window.port_chooser[dev['name']].findText(name))
                 if self.window.port_chooser[dev['name']].findText(name) == -1:
                     self.window.port_chooser[dev['name']].addItem(name)
 
@@ -312,11 +327,18 @@ class Controller:
 
 
     def initializeMainLoop(self, receiveInterval, sendInterval, drawInterval):
+        for i in range(len(self.timers)):
+            self.timers[i].start(receiveInterval)
+            print self.timers[i].timerId()
+
         # Start getting information from the communicator
-        for dev in COMS:
-            timer = QtCore.QTimer(self.window)
-            timer.timeout.connect(lambda: self.coms[dev['name']].receive(self.series))
-            timer.start(receiveInterval)
+        # timer = QtCore.QTimer(self.window)
+        # timer.timeout.connect(lambda: self.coms['arduino'].receive(self.series))
+        # timer.start(receiveInterval)
+
+        # timer = QtCore.QTimer(self.window)
+        # timer.timeout.connect(lambda: self.coms['thrust_bridge'].receive(self.series))
+        # timer.start(receiveInterval)
 
         # Set update interval for drawing the data
         timer = QtCore.QTimer(self.window)

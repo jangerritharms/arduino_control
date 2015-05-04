@@ -23,7 +23,7 @@ class Communicator(object):
     def disconnect(self):
         pass
 
-    def receive(self):
+    def receive(self, series):
         pass
 
     def send(self, data):
@@ -83,6 +83,8 @@ class Arduino(Communicator):
 
         self.connected = True
 
+        print "Starting Arduino measurement"
+
 
     def wait_for_message(self, message):
         start_waiting = time()
@@ -96,7 +98,7 @@ class Arduino(Communicator):
                 self.ser.write(message.encode())
             # timeout the waiting after 10s
             if time()-start_waiting > 10.0:
-                raise TimeoutError("Waiting for message %s timed out" %message)
+                raise Exception("Waiting for message %s timed out" %message)
 
     def disconnect(self):
         sleep(1.0)
@@ -108,6 +110,7 @@ class Arduino(Communicator):
         self.connected = False
 
     def receive(self, series):
+        print "Arduino receive"
         valid_lines = 0
         while self.connected and valid_lines < len(self.serie_names):
             line = self.ser.readline()
@@ -115,13 +118,17 @@ class Arduino(Communicator):
                 series[self.serie_names[valid_lines]].append(float(line))
                 valid_lines += 1
 
-class Bridge(Phidgets.Devices.Bridge.Bridge):
+class Bridge(Phidgets.Devices.Bridge.Bridge, Communicator):
 
     def BridgeAttached(self, e):
-        attached = e.device
+        self.attached = e.device
 
     def BridgeDetached(self, e):
-        detached = e.device
+        self.detached = e.device
+    
+    def BridgeData(self, e):
+        source = e.device
+        self.latest_data.append(float(e.value))
 
     def BridgeError(self, e):
         try:
@@ -129,6 +136,65 @@ class Bridge(Phidgets.Devices.Bridge.Bridge):
             print "Bridge %i: Phidget Error %i: %s" %(source.getSerialNum(), e.eCode, e.description)
         except:
             print "Phidget Exception %i: %s" %(e.code, e.details)
-            
 
+    def __init__(self):
+        super(Bridge, self).__init__()
+        self.attached = False
+        self.detached = False
 
+        self.serie_names = ["force_0", "force_1", "force_2", "force_3"]
+        self.setOnAttachHandler(self.BridgeAttached)
+        self.setOnDetachHandler(self.BridgeDetached)
+        self.setOnErrorhandler(self.BridgeError)
+        self.setOnBridgeDataHandler(self.BridgeData)
+        self.openPhidget()
+        self.latest_data = []
+
+    def scan(self):
+        try:
+            self.waitForAttach(10000)
+        except PhidgetException:
+            print "Could not find any bridge" 
+        start_time = time()
+        while not self.attached:
+            if time()-start_time > 10.0:
+                return ""
+
+        print " ".join([self.getDeviceName(), str(self.getSerialNum())])
+        return {" ".join([self.getDeviceName(), str(self.getSerialNum())]): self.getSerialNum()}
+
+    def connect(self, port):
+        self.displayDeviceInfo()
+        self.setDataRate(100)
+        self.setGain(2, Phidgets.Devices.Bridge.BridgeGain.PHIDGET_BRIDGE_GAIN_8)
+        self.connected = True
+        return self.serie_names
+
+    def start_measurement(self):
+        self.setEnabled(2, True)
+        pass
+
+    def disconnect(self):
+        self.setEnabled(2, False)
+        self.closePhidget()
+        self.connected = False
+        pass
+
+    def receive(self, series):
+        print "Bridge receive"
+        if self.connected:
+            if self.latest_data:
+                series[self.serie_names[2]].append(self.latest_data.pop())
+
+    #Information Display Function
+    def displayDeviceInfo(self):
+        print("|------------|----------------------------------|--------------|------------|")
+        print("|- Attached -|-              Type              -|- Serial No. -|-  Version -|")
+        print("|------------|----------------------------------|--------------|------------|")
+        print("|- %8s -|- %30s -|- %10d -|- %8d -|" % (self.isAttached(), self.getDeviceName(), self.getSerialNum(), self.getDeviceVersion()))
+        print("|------------|----------------------------------|--------------|------------|")
+        print("Number of bridge inputs: %i" % (self.getInputCount()))
+        print("Data Rate Max: %d" % (self.getDataRateMax()))
+        print("Data Rate Min: %d" % (self.getDataRateMin()))
+        print("Input Value Max: %d" % (self.getBridgeMax(0)))
+        print("Input Value Min: %d" % (self.getBridgeMin(0)))
