@@ -295,10 +295,12 @@ class Controller:
 
             QtGui.QApplication.processEvents()
 
-            self.port_list = self.coms[dev['name']].scan()
+            self.port_list[dev['name']] = self.coms[dev['name']].scan()
 
-            for name in self.port_list:
-                self.window.port_chooser[dev['name']].addItem(name)
+            for name in self.port_list[dev['name']]:
+                print "name {0} port_chooser {1}".format(name, self.window.port_chooser[dev['name']].findText(name))
+                if self.window.port_chooser[dev['name']].findText(name) == -1:
+                    self.window.port_chooser[dev['name']].addItem(name)
 
             # Print status
             if len(self.port_list)>0:
