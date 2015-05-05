@@ -8,8 +8,9 @@ from Phidgets.Phidget import PhidgetLogLevel
 
 class Communicator(object):
 
-    def __init__(self):
+    def __init__(self, series_prefix=''):
         self.connected = False
+
 
     def scan(self):
         pass
@@ -32,7 +33,7 @@ class Communicator(object):
 class Arduino(Communicator):
     """Class that communicates with the arduino board"""
 
-    def __init__(self):
+    def __init__(self, series_prefix=''):
 
         super(Arduino, self).__init__()
         self.serie_names = []
@@ -83,7 +84,6 @@ class Arduino(Communicator):
 
         self.connected = True
 
-        print "Starting Arduino measurement"
 
 
     def wait_for_message(self, message):
@@ -110,7 +110,6 @@ class Arduino(Communicator):
         self.connected = False
 
     def receive(self, series):
-        print "Arduino receive"
         valid_lines = 0
         while self.connected and valid_lines < len(self.serie_names):
             line = self.ser.readline()
@@ -127,8 +126,8 @@ class Bridge(Phidgets.Devices.Bridge.Bridge, Communicator):
         self.detached = e.device
     
     def BridgeData(self, e):
-        source = e.device
-        self.latest_data.append(float(e.value))
+        if " ".join([self.getDeviceName(), str(self.getSerialNum())]) == self.id:
+            self.latest_data[self.serie_names[e.index]].append(float(e.value))
 
     def BridgeError(self, e):
         try:
@@ -137,54 +136,63 @@ class Bridge(Phidgets.Devices.Bridge.Bridge, Communicator):
         except:
             print "Phidget Exception %i: %s" %(e.code, e.details)
 
-    def __init__(self):
+    def __init__(self, series_prefix = ''):
         super(Bridge, self).__init__()
         self.attached = False
         self.detached = False
 
+        # Identifier to check for incoming data
+        self.id = ''
+
         self.serie_names = ["force_0", "force_1", "force_2", "force_3"]
+        self.serie_names = ['_'.join([series_prefix,f]) for f in self.serie_names]
         self.setOnAttachHandler(self.BridgeAttached)
         self.setOnDetachHandler(self.BridgeDetached)
         self.setOnErrorhandler(self.BridgeError)
         self.setOnBridgeDataHandler(self.BridgeData)
         self.openPhidget()
-        self.latest_data = []
+        self.latest_data = {}
+        for s in self.serie_names:
+            self.latest_data[s] = []
 
     def scan(self):
         try:
-            self.waitForAttach(10000)
+            self.waitForAttach(1000)
         except PhidgetException:
             print "Could not find any bridge" 
         start_time = time()
         while not self.attached:
-            if time()-start_time > 10.0:
+            if time()-start_time > 1.0:
                 return ""
 
-        print " ".join([self.getDeviceName(), str(self.getSerialNum())])
         return {" ".join([self.getDeviceName(), str(self.getSerialNum())]): self.getSerialNum()}
 
     def connect(self, port):
         self.displayDeviceInfo()
+        self.id = port
         self.setDataRate(100)
-        self.setGain(2, Phidgets.Devices.Bridge.BridgeGain.PHIDGET_BRIDGE_GAIN_8)
+        for i in range(self.getInputCount()):
+            self.setGain(i, Phidgets.Devices.Bridge.BridgeGain.PHIDGET_BRIDGE_GAIN_8)
         self.connected = True
         return self.serie_names
 
     def start_measurement(self):
-        self.setEnabled(2, True)
+        for i in range(self.getInputCount()):
+            self.setEnabled(i, True)
         pass
 
     def disconnect(self):
-        self.setEnabled(2, False)
+        for i in range(self.getInputCount()):
+            self.setEnabled(2, False)
         self.closePhidget()
         self.connected = False
         pass
 
     def receive(self, series):
-        print "Bridge receive"
         if self.connected:
             if self.latest_data:
-                series[self.serie_names[2]].append(self.latest_data.pop())
+                for i in range(self.getInputCount()):
+                    series[self.serie_names[i]].append(self.latest_data[self.serie_names[i]].pop())
 
     #Information Display Function
     def displayDeviceInfo(self):

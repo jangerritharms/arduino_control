@@ -22,18 +22,7 @@ from communicator import Arduino, Bridge
 import numpy as np
 from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-
-PLOTS = 4
-LIMITS = {'counter': (0, 1000), 
-          'yaxis': (0, 1023), 
-          'force_0': (-0.1, 0.1), 
-          'force_1': (-0.1, 0.1), 
-          'force_2': (-0.1, 0.1), 
-          'force_3': (-0.1, 0.1)}
-COMS = [{'name': 'thrust_bridge', 'type': Bridge},
-        {'name': 'arduino', 'type': Arduino},
-        #{'name': 'lift_bridge', 'type': Bridge} 
-        ]
+from settings import PLOTS, COMS, LIMITS
 
 class Plotter(FigureCanvas):
     """A canvas that updates itself every second with a new plot.
@@ -230,12 +219,12 @@ class Controller:
         self.series = {}
 
         self.timers = []
+        receive_funcs = []
 
         for i, com in enumerate(COMS):
-            self.coms[com['name']] = com['type']()
+            self.coms[com['name']] = com['type'](com['series_prefix'])
             self.timers.append(QtCore.QTimer(self.window))
-
-        receive_funcs = [self.receive(self.coms['arduino']), self.receive(self.coms['thrust_bridge'])]
+            receive_funcs.append(self.receive(self.coms[com['name']]))
 
         for i in range(len(self.timers)):
             self.timers[-1].timeout.connect(receive_funcs[i])
@@ -257,7 +246,13 @@ class Controller:
         for dev in COMS:
             self.window.com_status[dev['name']].setText("Connecting ...")
 
-            port = self.port_list[dev['name']][str(self.window.port_chooser[dev['name']].currentText())]
+            if self.window.port_chooser[dev['name']].currentText():
+                port = self.port_list[dev['name']][str(self.window.port_chooser[dev['name']].currentText())]
+            else:
+                result = QtGui.QMessageBox.warning(self.window, 'Save or Discard', 'One of the devices is not connected. Please connect all devices.', QtGui.QMessageBox.Ok)
+                self.window.com_status[dev['name']].setText("Not connected")
+                return
+                
      
             serie_names = self.coms[dev['name']].connect(port)
 
@@ -306,23 +301,25 @@ class Controller:
     def scan(self):
 
         for dev in COMS:
-            self.window.com_status[dev['name']].setText("&Scanning ... ")
+            self.window.com_status[dev['name']].setText("Scanning ... ")
             self.window.com_status[dev['name']].setStyleSheet("QLabel { background-color: yellow; color: white; padding-left: 5px}")
 
             QtGui.QApplication.processEvents()
 
             self.port_list[dev['name']] = self.coms[dev['name']].scan()
 
+            # Remove all items before adding new ones
+            self.window.port_chooser[dev['name']].clear()
             for name in self.port_list[dev['name']]:
                 if self.window.port_chooser[dev['name']].findText(name) == -1:
                     self.window.port_chooser[dev['name']].addItem(name)
 
             # Print status
-            if len(self.port_list)>0:
-                self.window.com_status[dev['name']].setText("%d devices found. Ready."%len(self.port_list))
+            if len(self.port_list[dev['name']])>0:
+                self.window.com_status[dev['name']].setText("%d devices found. Ready."%len(self.port_list[dev['name']]))
                 self.window.com_status[dev['name']].setStyleSheet("QLabel { background-color: green; color: white; padding-left: 5px}")
             else:
-                self.window.com_status[dev['name']].setText("No Arduino found, please connect one via USB.")
+                self.window.com_status[dev['name']].setText("No device found")
                 self.window.com_status[dev['name']].setStyleSheet("QLabel { background-color: red; color: white; padding-left: 5px}")
 
 
