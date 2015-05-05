@@ -206,10 +206,6 @@ class Controller:
         self.window.show()
         self.window.raise_()
 
-        #self.arduino = Arduino(self.window)
-        #self.thrust_bridge = Bridge()
-        #self.lift_bridge = Bridge()
-
         # Create the communicators
         self.coms = {}
 
@@ -232,7 +228,6 @@ class Controller:
         # Connecting buttons to functions
         self.window.connecter.clicked.connect(self.connect)
         self.window.scanner.clicked.connect(self.scan)
-
 
         # Scan for connected devices
         self.scan()

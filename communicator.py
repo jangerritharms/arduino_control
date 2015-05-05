@@ -126,7 +126,7 @@ class Bridge(Phidgets.Devices.Bridge.Bridge, Communicator):
         self.detached = e.device
     
     def BridgeData(self, e):
-        if " ".join([self.getDeviceName(), str(self.getSerialNum())]) == self.id:
+        if self.getSerialNum() == self.id:
             self.latest_data[self.serie_names[e.index]].append(float(e.value))
 
     def BridgeError(self, e):

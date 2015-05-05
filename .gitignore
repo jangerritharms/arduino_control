@@ -63,3 +63,5 @@ target/
 # ignore data files
 *.csv
 *.conf
+
+.build/
