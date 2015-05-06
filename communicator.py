@@ -62,7 +62,7 @@ class Arduino(Communicator):
 
         import serial
         try:
-            self.ser = serial.Serial(port, 9600, timeout = 5.0)
+            self.ser = serial.Serial(port, 9600, timeout = 0.1)
             self.ser.flush()
         except OSError:
             print "Port is not valid anymore"
@@ -79,7 +79,7 @@ class Arduino(Communicator):
     def start_measurement(self):
 
         sleep(1.0)
-        self.ser.write("go".encode())
+        self.ser.write("go\n".encode())
         self.wait_for_message("go")
 
         self.connected = True
@@ -94,16 +94,17 @@ class Arduino(Communicator):
             if len(self.line)>2 and self.line.split()[0] == message:
                 break
             # retry sending the message if waiting for more than 5s
-            if time()-start_waiting > 5.0:
-                self.ser.write(message.encode())
+            if time()-start_waiting > 1.0:
+                self.ser.write((message+'\n').encode())
             # timeout the waiting after 10s
-            if time()-start_waiting > 10.0:
-                raise Exception("Waiting for message %s timed out" %message)
+            if time()-start_waiting > 2.0:
+                print ("Waiting for message %s timed out" %message)
+                return
 
     def disconnect(self):
-        sleep(1.0)
-        self.ser.write("done".encode())
-        sleep(1.0)
+        sleep(0.1)
+        self.ser.write("done\n".encode())
+        sleep(0.1)
         self.wait_for_message("done")
         self.ser.flush()
         self.ser.close()
@@ -111,11 +112,18 @@ class Arduino(Communicator):
 
     def receive(self, series):
         valid_lines = 0
-        while self.connected and valid_lines < len(self.serie_names):
+        start_time = time()
+        while self.connected and valid_lines < len(self.serie_names) and time()-start_time<0.1:
             line = self.ser.readline()
+            print line
             if len(line)>2:
                 series[self.serie_names[valid_lines]].append(float(line))
                 valid_lines += 1
+
+    def send(self, data):
+        self.ser.write(("set %i\n"%int(data)).encode())
+        print "Sent message"
+
 
 class Bridge(Phidgets.Devices.Bridge.Bridge, Communicator):
 

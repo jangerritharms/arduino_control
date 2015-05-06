@@ -6,22 +6,41 @@ int joyPinx = 0;
 int joyPiny = 1;
 int value=0;
 int counter=0;
-enum status {HANDSHAKE_SEND, HANDSHAKE_RECEIVE, RUNNING};
+enum status {HANDSHAKE_SEND=1, HANDSHAKE_RECEIVE, RUNNING};
+
+int speedvalue = 1100;
 status s;
-#define BUFFER_SIZE 10
-char in[BUFFER_SIZE];
+String buffer;
+
+void get_data(){
+  int buf = buffer.substring(4).toInt();
+  if (buf >= 1000 && buf <= 2000){
+    speedvalue = buf;
+  }
+}
+
+void receive(const char* message, int new_state, void (*func)()){
+  if (buffer.startsWith(message)){
+    if (new_state){
+      Serial.println(message);
+      s = (status)new_state;
+    }
+    if (func)
+      (*func)();
+  }
+}
 
 void setup() 
 {
     Serial.begin(9600);
     s = HANDSHAKE_SEND;
-    for (int i=0;i<BUFFER_SIZE; i++)
-      in[i] = 0;
 } 
 
 void loop() 
 {
-    
+    char data_buf[10] = "";
+    if(Serial.available() > 0)
+      buffer = Serial.readStringUntil('\n');
     switch(s){
       case HANDSHAKE_SEND:
         counter=0;
@@ -30,7 +49,7 @@ void loop()
         s = HANDSHAKE_RECEIVE;
         break;
       case HANDSHAKE_RECEIVE:
-        receive("go", RUNNING);
+        receive("go", RUNNING, NULL);
         delay(10);
         break;
       case RUNNING:
@@ -38,29 +57,11 @@ void loop()
         Serial.println(counter);
         Serial.println(value);
         Serial.println("");
-        receive("done", HANDSHAKE_SEND);
+        receive("done", HANDSHAKE_SEND, NULL);
+        receive("set", NULL, &get_data);
         delay(100);
         counter++;
         break;
     }
 }
 
-void receive(const char* message, int new_state){
-  char c;
-  int index = 0;
-  
-  while(Serial.available() > 0){
-    if (index < BUFFER_SIZE-1 && (c=Serial.read())!='\n') {
-      in[index] = c;
-      index++;
-      in[index] = '\0';
-    }
-  }
-  if (strcmp(in, message)==0){
-    Serial.println(message);
-    s = (status)new_state;
-  }
-  index = 0;
-  for(int i=0;i<BUFFER_SIZE;++i)
-    in[i] = 0;
-}

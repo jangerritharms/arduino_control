@@ -112,8 +112,19 @@ class ApplicationWindow(QtGui.QMainWindow):
         self.com_label = {}
 
         self.main_widget = QtGui.QWidget(self)
+        full_layout = QtGui.QHBoxLayout(self.main_widget)
         layout = QtGui.QVBoxLayout(self.main_widget)
         com_row = QtGui.QHBoxLayout(self.main_widget)
+        self.slider = QtGui.QSlider(self.main_widget)
+        self.slider.setOrientation(QtCore.Qt.Vertical)
+        separator = QtGui.QFrame()
+        self.spinbox = QtGui.QSpinBox()
+        separator.setFrameStyle(QtGui.QFrame.VLine)
+        self.slider.setRange(1000, 2000);
+        self.spinbox.setRange(1000, 2000);
+        self.slider.valueChanged.connect(self.spinbox.setValue)
+        self.spinbox.valueChanged.connect(self.slider.setValue)
+
 
         # Create plots
         for i in range(PLOTS):
@@ -165,6 +176,10 @@ class ApplicationWindow(QtGui.QMainWindow):
         layout.addLayout(plot_row)
         layout.addWidget(self.scanner)
         layout.addWidget(self.connecter)
+        full_layout.addLayout(layout)
+        full_layout.addWidget(separator)
+        full_layout.addWidget(self.slider)
+        full_layout.addWidget(self.spinbox)
 
         self.main_widget.setFocus()
         self.setCentralWidget(self.main_widget)
@@ -228,12 +243,19 @@ class Controller:
         # Connecting buttons to functions
         self.window.connecter.clicked.connect(self.connect)
         self.window.scanner.clicked.connect(self.scan)
+        self.window.slider.valueChanged.connect(self.sendSpeedValue)
+        self.window.slider.valueChanged.connect(self.sendSpeedValue)
 
         # Scan for connected devices
         self.scan()
 
         self.x = np.linspace(-100, 0, 1000)
         self.test = 0 
+
+    def sendSpeedValue(self):
+        
+        if self.coms['arduino'].connected:
+            self.coms['arduino'].send(self.window.spinbox.value())
 
 
     def connect(self):
