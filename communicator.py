@@ -62,7 +62,7 @@ class Arduino(Communicator):
 
         import serial
         try:
-            self.ser = serial.Serial(port, 9600, timeout = 0.1)
+            self.ser = serial.Serial(port, 115200, timeout = 0.1)
             self.ser.flush()
         except OSError:
             print "Port is not valid anymore"
@@ -115,10 +115,14 @@ class Arduino(Communicator):
         start_time = time()
         while self.connected and valid_lines < len(self.serie_names) and time()-start_time<0.1:
             line = self.ser.readline()
-            print line
             if len(line)>2:
-                series[self.serie_names[valid_lines]].append(float(line))
-                valid_lines += 1
+                try:
+                    value = float(line)
+                    print line
+                    series[self.serie_names[valid_lines]].append(value)
+                    valid_lines += 1
+                except ValueError:
+                    print line
 
     def send(self, data):
         self.ser.write(("set %i\n"%int(data)).encode())
