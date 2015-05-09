@@ -138,8 +138,7 @@ class Bridge(Phidgets.Devices.Bridge.Bridge, Communicator):
         self.detached = e.device
     
     def BridgeData(self, e):
-        if self.getSerialNum() == self.id:
-            self.latest_data[self.serie_names[e.index]].append(float(e.value))
+        self.latest_data[self.serie_names[e.index]].append(float(e.value))
 
     def BridgeError(self, e):
         try:
@@ -152,9 +151,7 @@ class Bridge(Phidgets.Devices.Bridge.Bridge, Communicator):
         super(Bridge, self).__init__()
         self.attached = False
         self.detached = False
-
-        # Identifier to check for incoming data
-        self.id = ''
+        self.connected = False
 
         self.serie_names = ["force_0", "force_1", "force_2", "force_3"]
         self.serie_names = ['_'.join([series_prefix,f]) for f in self.serie_names]
@@ -162,36 +159,55 @@ class Bridge(Phidgets.Devices.Bridge.Bridge, Communicator):
         self.setOnDetachHandler(self.BridgeDetached)
         self.setOnErrorhandler(self.BridgeError)
         self.setOnBridgeDataHandler(self.BridgeData)
-        self.openPhidget()
         self.latest_data = {}
         for s in self.serie_names:
             self.latest_data[s] = []
 
     def scan(self):
-        try:
-            self.waitForAttach(1000)
-        except PhidgetException:
-            print "Could not find any bridge" 
-        start_time = time()
-        while not self.attached:
-            if time()-start_time > 1.0:
-                return ""
+        import subprocess
+        from sys import platform as _platform
 
-        return {" ".join([self.getDeviceName(), str(self.getSerialNum())]): self.getSerialNum()}
+        bridges = {}
+        if _platform == "linux" or _platform=="linux2":
+            usb_devices = subprocess.check_output("lsusb -v | grep 'iProduct\|iSerial'", shell=True)
+            lines = usb_devices.split('\n')
+            bridges = dict([(' '.join(['PhidgetBridge', lines[i+1].split()[-1]]), lines[i+1].split()[-1]) for i, line in enumerate(lines) if 'PhidgetBridge' in line])
+
+        return bridges
 
     def connect(self, port):
-        self.displayDeviceInfo()
-        self.id = port
-        self.setDataRate(100)
-        for i in range(self.getInputCount()):
-            self.setGain(i, Phidgets.Devices.Bridge.BridgeGain.PHIDGET_BRIDGE_GAIN_8)
-        self.connected = True
+        # Don't try to connect if already connected
+        if self.connected:
+            return self.serie_names
+
+        try:
+            self.openPhidget(int(port))
+        except PhidgetException as e:
+            print("Phidget Exception %i: %s" %(e.code, e.details))
+            self.closePhidget()
+            return []
+        try:
+            self.waitForAttach(10000)
+        except PhidgetException as e:
+            print("Phidget Exception %i: %s" %(e.code, e.details))
+            self.closePhidget()
+            return []
+        try:
+            self.displayDeviceInfo()
+            self.setDataRate(20)
+            for i in range(self.getInputCount()):
+                self.setGain(i, Phidgets.Devices.Bridge.BridgeGain.PHIDGET_BRIDGE_GAIN_8)
+            self.connected = True
+        except PhidgetException as e:
+            print("Phidget Exception %i: %s" %(e.code, e.details))
+            self.closePhidget()
+            return []
         return self.serie_names
 
     def start_measurement(self):
-        for i in range(self.getInputCount()):
-            self.setEnabled(i, True)
-        pass
+        if self.connected:
+            for i in range(self.getInputCount()):
+                self.setEnabled(i, True)
 
     def disconnect(self):
         for i in range(self.getInputCount()):

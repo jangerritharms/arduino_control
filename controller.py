@@ -273,6 +273,11 @@ class Controller:
                 
      
             serie_names = self.coms[dev['name']].connect(port)
+            if serie_names == []:
+                self.window.com_status[dev['name']].setStyleSheet("QLabel { background-color: red; color: white; padding-left: 5px}")
+                self.window.com_status[dev['name']].setText("Not connected")
+                return
+
 
             for key in serie_names:
                 if key not in self.series:
@@ -281,6 +286,7 @@ class Controller:
                 self.series[key] = []
 
             self.window.com_status[dev['name']].setText("Connected");
+            self.window.com_status[dev['name']].setStyleSheet("QLabel { background-color: green; color: white; padding-left: 5px}")
 
         self.window.connecter.setText("&Start Measurement");
         self.window.connecter.clicked.disconnect()
