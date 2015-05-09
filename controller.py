@@ -22,7 +22,7 @@ from communicator import Arduino, Bridge
 import numpy as np
 from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-from settings import PLOTS, COMS, LIMITS
+from settings import PLOTS, COMS, LIMITS, SAMPLE_RATE, DRAW_RATE
 
 class Plotter(FigureCanvas):
     """A canvas that updates itself every second with a new plot.
@@ -61,6 +61,7 @@ class Plotter(FigureCanvas):
         self.axes.set_xbound(-101, 1)
     
     def update_figure(self, y):
+
         redraw = False
         # update data
         self.y = y
@@ -293,7 +294,7 @@ class Controller:
             elif result == QtGui.QMessageBox.Discard: pass
             else: return
 
-        self.initializeMainLoop(100, 100, 100)
+        self.initializeMainLoop(1000/SAMPLE_RATE, 1000/DRAW_RATE)
         for dev in COMS:
             self.coms[dev['name']].start_measurement()
             self.window.com_status[dev['name']].setText("Measuring");
@@ -340,19 +341,10 @@ class Controller:
                 self.window.com_status[dev['name']].setStyleSheet("QLabel { background-color: red; color: white; padding-left: 5px}")
 
 
-    def initializeMainLoop(self, receiveInterval, sendInterval, drawInterval):
+    def initializeMainLoop(self, receiveInterval, drawInterval):
         for i in range(len(self.timers)):
             self.timers[i].start(receiveInterval)
             print self.timers[i].timerId()
-
-        # Start getting information from the communicator
-        # timer = QtCore.QTimer(self.window)
-        # timer.timeout.connect(lambda: self.coms['arduino'].receive(self.series))
-        # timer.start(receiveInterval)
-
-        # timer = QtCore.QTimer(self.window)
-        # timer.timeout.connect(lambda: self.coms['thrust_bridge'].receive(self.series))
-        # timer.start(receiveInterval)
 
         # Set update interval for drawing the data
         timer = QtCore.QTimer(self.window)
@@ -360,6 +352,7 @@ class Controller:
         timer.start(drawInterval)
 
     def update_figure(self):
+        start_time = time()
         for dev in COMS:
             if not self.coms[dev['name']].connected:
                 return
@@ -369,6 +362,8 @@ class Controller:
                 self.window.plotter[i].update_figure(self.series[str(self.window.series_chooser[i].currentText())])
             else:
                 self.window.plotter[i].update_figure(self.series[str(self.window.series_chooser[i].currentText())][-1000:])
+        print "--- %s seconds ---" %(time() - start_time)
+
 
     def run(self):
         try:
