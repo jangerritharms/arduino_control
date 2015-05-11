@@ -12,9 +12,9 @@ LIMITS = {'counter': (0, 1000),
           'roll': (-90, 90), 
           'fcnt': (0, 64), 
           'timer': (0, 10)}
-COMS = [{'name': 'thrust_bridge', 'type': Bridge, 'series_prefix': 'thrust'},
-        # {'name': 'arduino', 'type': Arduino, 'series_prefix': ''},
-        {'name': 'lift_bridge', 'type': Bridge, 'series_prefix':'lift'} 
+COMS = [#{'name': 'thrust_bridge', 'type': Bridge, 'series_prefix': 'thrust'},
+        {'name': 'arduino', 'type': Arduino, 'series_prefix': ''},
+        #{'name': 'lift_bridge', 'type': Bridge, 'series_prefix':'lift'} 
         ]
 SAMPLE_RATE = 50 #hz
 DRAW_RATE = 10 #hz

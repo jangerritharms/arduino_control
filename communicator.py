@@ -111,18 +111,17 @@ class Arduino(Communicator):
         self.connected = False
 
     def receive(self, series):
-        valid_lines = 0
         start_time = time()
-        while self.connected and valid_lines < len(self.serie_names) and time()-start_time<0.1:
+        while self.connected and time() - start_time < 0.02:
             line = self.ser.readline()
-            if len(line)>2:
-                try:
-                    value = float(line)
-                    print line
-                    series[self.serie_names[valid_lines]].append(value)
-                    valid_lines += 1
-                except ValueError:
-                    print line
+            values = line.split('\t')
+            if len(values) == len(series):
+                for i, value in enumerate(values):
+                    value = float(value)
+                    series[self.serie_names[i]].append(value)
+                break
+            else:
+                print line
 
     def send(self, data):
         self.ser.write(("set %i\n"%int(data)).encode())

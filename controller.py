@@ -11,6 +11,7 @@ from __future__ import unicode_literals
 import sys
 import os
 import random
+from copy import deepcopy
 from time import sleep, time
 from datetime import datetime
 from PyQt4 import QtGui, QtCore
@@ -115,6 +116,7 @@ class ApplicationWindow(QtGui.QMainWindow):
         self.main_widget = QtGui.QWidget(self)
         full_layout = QtGui.QHBoxLayout(self.main_widget)
         layout = QtGui.QVBoxLayout(self.main_widget)
+        control_layout = QtGui.QGridLayout(self.main_widget)
         com_row = QtGui.QHBoxLayout(self.main_widget)
         self.slider = QtGui.QSlider(self.main_widget)
         self.slider.setOrientation(QtCore.Qt.Vertical)
@@ -125,6 +127,9 @@ class ApplicationWindow(QtGui.QMainWindow):
         self.spinbox.setRange(1000, 2000);
         self.slider.valueChanged.connect(self.spinbox.setValue)
         self.spinbox.valueChanged.connect(self.slider.setValue)
+        self.pitch_label = QtGui.QLabel(self.main_widget)
+        self.yaw_label = QtGui.QLabel(self.main_widget)
+        self.roll_label = QtGui.QLabel(self.main_widget)
 
 
         # Create plots
@@ -175,12 +180,20 @@ class ApplicationWindow(QtGui.QMainWindow):
             plot_row.addWidget(self.plotter[i])
         plot_row.addLayout(plot_layout)
         layout.addLayout(plot_row)
-        layout.addWidget(self.scanner)
-        layout.addWidget(self.connecter)
+        control_layout.addWidget(self.scanner, 0, 0, 1, 1)
+        control_layout.addWidget(self.connecter, 1, 0, 1, 1)
+        control_layout.addWidget(self.slider, 2, 0, 5, 1)
+        control_layout.addWidget(self.spinbox, 7, 0, 1, 1)
+        control_layout.addWidget(self.pitch_label, 8, 0, 1, 1)
+        control_layout.addWidget(self.yaw_label, 9, 0, 1, 1)
+        control_layout.addWidget(self.roll_label, 10, 0, 1, 1)
         full_layout.addLayout(layout)
         full_layout.addWidget(separator)
-        full_layout.addWidget(self.slider)
-        full_layout.addWidget(self.spinbox)
+        full_layout.addLayout(control_layout)
+
+        self.pitch_label.setText("Pitch: ?")
+        self.yaw_label.setText("Yaw: ?")
+        self.roll_label.setText("Roll: ?")
 
         self.main_widget.setFocus()
         self.setCentralWidget(self.main_widget)
@@ -288,9 +301,9 @@ class Controller:
             self.window.com_status[dev['name']].setText("Connected");
             self.window.com_status[dev['name']].setStyleSheet("QLabel { background-color: green; color: white; padding-left: 5px}")
 
-        self.window.connecter.setText("&Start Measurement");
+        self.window.connecter.setText("&Calibrate");
         self.window.connecter.clicked.disconnect()
-        self.window.connecter.clicked.connect(self.start_measurement)
+        self.window.connecter.clicked.connect(self.calibrate)
 
     def start_measurement(self):
 
@@ -301,9 +314,6 @@ class Controller:
             else: return
 
         self.initializeMainLoop(1000/SAMPLE_RATE, 1000/DRAW_RATE)
-        for dev in COMS:
-            self.coms[dev['name']].start_measurement()
-            self.window.com_status[dev['name']].setText("Measuring");
 
         self.window.connecter.setText("&Disconnect");
         self.window.connecter.clicked.disconnect()
@@ -347,11 +357,37 @@ class Controller:
                 self.window.com_status[dev['name']].setStyleSheet("QLabel { background-color: red; color: white; padding-left: 5px}")
 
 
-    def initializeMainLoop(self, receiveInterval, drawInterval):
+    def calibrate(self):
         for i in range(len(self.timers)):
-            self.timers[i].start(receiveInterval)
-            print self.timers[i].timerId()
+            self.timers[i].start(1000/SAMPLE_RATE)
 
+        for dev in COMS:
+            self.coms[dev['name']].start_measurement()
+            self.window.com_status[dev['name']].setText("Measuring");
+
+        self.empty_series = deepcopy(self.series)
+        # wait for the accelerometer to stabilize
+        if 'pitch' in self.series and 'yaw' in self.series and 'roll' in self.series:
+            print "Waiting for the accelerometer to stabilize"
+            i = 0
+            while True:
+                QtGui.QApplication.processEvents()
+                if all([x<0.01 for x in np.diff(self.series['pitch'][-20:])]) \
+                        and all([x<0.01 for x in np.diff(self.series['yaw'][-20:])]) \
+                        and all([x<0.01 for x in np.diff(self.series['roll'][-20:])]):
+                    i += 1
+                    if i>=50:
+                        break
+
+        # also reset the force sensors here
+        
+        self.window.connecter.setText("&Start Measurement");
+        self.window.connecter.clicked.disconnect()
+        self.window.connecter.clicked.connect(self.start_measurement)
+
+    def initializeMainLoop(self, receiveInterval, drawInterval):
+        # Empty the measurement data
+        self.series = self.empty_series
         # Set update interval for drawing the data
         timer = QtCore.QTimer(self.window)
         timer.timeout.connect(self.update_figure)
@@ -368,7 +404,6 @@ class Controller:
                 self.window.plotter[i].update_figure(self.series[str(self.window.series_chooser[i].currentText())])
             else:
                 self.window.plotter[i].update_figure(self.series[str(self.window.series_chooser[i].currentText())][-1000:])
-        print "--- %s seconds ---" %(time() - start_time)
 
 
     def run(self):

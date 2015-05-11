@@ -8,7 +8,6 @@ int joyPinx = 0;
 int joyPiny = 1;
 int motorPin = 9;
 int arm = 1000;
-int value=0;
 int counter=0;
 int sample_rate = 50;
 enum status {HANDSHAKE_SEND=1, HANDSHAKE_RECEIVE, RUNNING};
@@ -94,7 +93,7 @@ void loop()
         esc.detach();
         counter=0;
         delay(100);
-        Serial.println("series counter yaxis yaw pitch roll fcnt timer");
+        Serial.println("series counter yaw pitch roll fcnt timer");
         s = HANDSHAKE_RECEIVE;
         break;
       case HANDSHAKE_RECEIVE:
@@ -102,10 +101,6 @@ void loop()
         mpu.resetFIFO();
         break;
       case RUNNING:
-        value = analogRead(joyPiny);
-        Serial.println(counter);
-        Serial.println(value);
-        
         bool received = false;
         while (!received){
           
@@ -141,16 +136,21 @@ void loop()
             mpu.dmpGetGravity(&gravity, &q);
             mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
             start_time = micros();
-            Serial.println(ypr[0] * 180/M_PI);
-            Serial.println(ypr[1] * 180/M_PI);
-            Serial.println(ypr[2] * 180/M_PI);
-            Serial.println(fifoCount);
             end_time = micros();
             received = true;
           }
         }
-        Serial.println(end_time-start_time);
-        Serial.println("");        
+        Serial.print(counter);
+        Serial.print('\t');
+        Serial.print(ypr[0] * 180/M_PI);
+        Serial.print('\t');
+        Serial.print(ypr[2] * 180/M_PI);        
+        Serial.print('\t');
+        Serial.print(ypr[1] * 180/M_PI);
+        Serial.print('\t');
+        Serial.print(fifoCount);        
+        Serial.print('\t');
+        Serial.println(end_time-start_time);     
         receive("done", HANDSHAKE_SEND, NULL);
         receive("set", NULL, &get_data);
         counter++;
