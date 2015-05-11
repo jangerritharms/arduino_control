@@ -4,11 +4,13 @@
 #include "MPU6050_6Axis_MotionApps20.h"
 #include "Wire.h"
 
-int joyPinx = 0;
-int joyPiny = 1;
+int currentPin = 0;
+int voltagePin = 1;
 int motorPin = 9;
 int arm = 1000;
 unsigned long counter=0;
+int voltage = 0;
+int current = 0;
 int sample_rate = 50;
 enum status {HANDSHAKE_SEND=1, HANDSHAKE_RECEIVE, RUNNING};
 Servo esc;
@@ -93,7 +95,7 @@ void loop()
         esc.detach();
         counter=0;
         delay(100);
-        Serial.println("series counter yaw pitch roll fcnt timer");
+        Serial.println("series counter yaw pitch roll fcnt timer voltage current");
         s = HANDSHAKE_RECEIVE;
         break;
       case HANDSHAKE_RECEIVE:
@@ -140,6 +142,8 @@ void loop()
             received = true;
           }
         }
+        voltage = analogRead(voltagePin);
+        current = analogRead(currentPin);
         Serial.print(counter);
         Serial.print('\t');
         Serial.print(ypr[0] * 180/M_PI);
@@ -150,7 +154,11 @@ void loop()
         Serial.print('\t');
         Serial.print(fifoCount);        
         Serial.print('\t');
-        Serial.println(end_time-start_time);     
+        Serial.print(end_time-start_time);
+        Serial.print('\t');
+        Serial.print((float)voltage/1023*5000/63.69);
+        Serial.print('\t');
+        Serial.println((float)current/1023*5000/36.6);
         receive("done", HANDSHAKE_SEND, NULL);
         receive("set", NULL, &get_data);
         counter++;
