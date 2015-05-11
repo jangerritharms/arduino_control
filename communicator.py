@@ -24,7 +24,7 @@ class Communicator(object):
     def disconnect(self):
         pass
 
-    def receive(self, series):
+    def receive(self, series, adjust):
         pass
 
     def send(self, data):
@@ -110,15 +110,18 @@ class Arduino(Communicator):
         self.ser.close()
         self.connected = False
 
-    def receive(self, series):
+    def receive(self, series, adjust):
         start_time = time()
         while self.connected and time() - start_time < 0.02:
             line = self.ser.readline()
             values = line.split('\t')
-            if len(values) == len(series):
+            if len(values) == len(self.serie_names):
                 for i, value in enumerate(values):
                     value = float(value)
-                    series[self.serie_names[i]].append(value)
+                    if self.serie_names[i] in adjust:
+                        series[self.serie_names[i]].append(value-adjust[self.serie_names[i]])
+                    else:
+                        series[self.serie_names[i]].append(value)
                 break
             else:
                 print line
@@ -215,11 +218,14 @@ class Bridge(Phidgets.Devices.Bridge.Bridge, Communicator):
         self.connected = False
         pass
 
-    def receive(self, series):
+    def receive(self, series, adjust):
         if self.connected:
             if self.latest_data:
                 for i in range(self.getInputCount()):
-                    series[self.serie_names[i]].append(self.latest_data[self.serie_names[i]].pop())
+                    if self.serie_names[i] in adjust:
+                        series[self.serie_names[i]].append(self.latest_data[self.serie_names[i]].pop()-adjust[self.serie_names[i]])
+                    else:
+                        series[self.serie_names[i]].append(self.latest_data[self.serie_names[i]].pop())
 
     #Information Display Function
     def displayDeviceInfo(self):

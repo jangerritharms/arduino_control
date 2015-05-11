@@ -8,7 +8,7 @@ int joyPinx = 0;
 int joyPiny = 1;
 int motorPin = 9;
 int arm = 1000;
-int counter=0;
+unsigned long counter=0;
 int sample_rate = 50;
 enum status {HANDSHAKE_SEND=1, HANDSHAKE_RECEIVE, RUNNING};
 Servo esc;
@@ -115,7 +115,7 @@ void loop()
           fifoCount = mpu.getFIFOCount();
           
           // check for overflow (this should never happen unless our code is too inefficient)
-          if ((mpuIntStatus & 0x10) || fifoCount == 1024) {
+          if ((mpuIntStatus & 0x10) || fifoCount > 100) {
             // reset so we can continue cleanly
             mpu.resetFIFO();
             Serial.println("FIFO overflow!");

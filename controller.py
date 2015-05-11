@@ -131,7 +131,6 @@ class ApplicationWindow(QtGui.QMainWindow):
         self.yaw_label = QtGui.QLabel(self.main_widget)
         self.roll_label = QtGui.QLabel(self.main_widget)
 
-
         # Create plots
         for i in range(PLOTS):
             self.plotter.append(Plotter(100, parent=self.main_widget, width=5, height=4, dpi=100))
@@ -242,6 +241,7 @@ class Controller:
         self.saved = True
         self.port_list = {}
         self.series = {}
+        self.serie_adjust = {}
 
         self.timers = []
         receive_funcs = []
@@ -330,7 +330,7 @@ class Controller:
         self.window.connecter.clicked.connect(self.connect)
 
     def receive(self, com):
-        return lambda: com.receive(self.series)
+        return lambda: com.receive(self.series, self.serie_adjust)
 
     def scan(self):
 
@@ -380,12 +380,16 @@ class Controller:
                         break
 
         # also reset the force sensors here
-        
+        for value in self.series:
+            if 'force' in value:
+                self.serie_adjust[value] = sum(self.series[value])/len(self.series[value])
+ 
         self.window.connecter.setText("&Start Measurement");
         self.window.connecter.clicked.disconnect()
         self.window.connecter.clicked.connect(self.start_measurement)
 
     def initializeMainLoop(self, receiveInterval, drawInterval):
+        self.serie_adjust['counter'] = self.series['counter'][-1] 
         # Empty the measurement data
         self.series = self.empty_series
         # Set update interval for drawing the data
