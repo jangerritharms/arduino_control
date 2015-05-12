@@ -199,6 +199,8 @@ K = [weight/(m-o) for m, o in zip(meas, offsets)]
 calib_file = open("calib_{0}.conf".format(bridge.getSerialNum()), 'wb')
 for k in K:
     print>>calib_file, k
+for o in offsets:
+    print>>calib_file, o
 calib_file.close()
 print "Saved results"
 
