@@ -140,7 +140,8 @@ class Bridge(Phidgets.Devices.Bridge.Bridge, Communicator):
         self.detached = e.device
     
     def BridgeData(self, e):
-        self.latest_data[self.serie_names[e.index]].append(float(e.value))
+        if len(self.K) == 4 and len(self.offsets) == 4:
+            self.latest_data[self.serie_names[e.index]].append(1000*self.K[e.index]*(float(e.value-self.offsets[e.index])))
 
     def BridgeError(self, e):
         try:
@@ -154,6 +155,8 @@ class Bridge(Phidgets.Devices.Bridge.Bridge, Communicator):
         self.attached = False
         self.detached = False
         self.connected = False
+        self.K = []
+        self.offsets = []
 
         self.serie_names = ["force_0", "force_1", "force_2", "force_3"]
         self.serie_names = ['_'.join([series_prefix,f]) for f in self.serie_names]
@@ -196,6 +199,10 @@ class Bridge(Phidgets.Devices.Bridge.Bridge, Communicator):
             return []
         try:
             self.displayDeviceInfo()
+            with open('calib_%i.conf'%(self.getSerialNum()), 'rb') as f:
+                values = f.read().split('\n')
+                self.K = [float(x) for i, x in enumerate(values) if x and i<4]
+                self.offsets = [float(x) for i, x in enumerate(values) if x and i>3]
             self.setDataRate(20)
             for i in range(self.getInputCount()):
                 self.setGain(i, Phidgets.Devices.Bridge.BridgeGain.PHIDGET_BRIDGE_GAIN_8)

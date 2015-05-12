@@ -365,6 +365,11 @@ class Controller:
             self.coms[dev['name']].start_measurement()
             self.window.com_status[dev['name']].setText("Measuring");
 
+        # Measure something even if arduino is not connected
+        stime = time()
+        while (time()-stime)< 2.0:
+            QtGui.QApplication.processEvents()
+
         self.empty_series = deepcopy(self.series)
         # wait for the accelerometer to stabilize
         if 'pitch' in self.series and 'yaw' in self.series and 'roll' in self.series:
@@ -389,7 +394,8 @@ class Controller:
         self.window.connecter.clicked.connect(self.start_measurement)
 
     def initializeMainLoop(self, receiveInterval, drawInterval):
-        self.serie_adjust['counter'] = self.series['counter'][-1] 
+        if 'counter' in self.series:
+            self.serie_adjust['counter'] = self.series['counter'][-1] 
         # Empty the measurement data
         self.series = self.empty_series
         # Set update interval for drawing the data

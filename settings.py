@@ -17,10 +17,11 @@ LIMITS = {'counter': (0, 1000),
           'fcnt': (0, 64), 
           'timer': (0, 10), 
           'voltage': (0, 14), 
-          'current': (0, 10)}
+          'current': (0, 10), 
+          'rpm': (0, 5000)}
 COMS = [#{'name': 'thrust_bridge', 'type': Bridge, 'series_prefix': 'thrust'},
         {'name': 'arduino', 'type': Arduino, 'series_prefix': ''},
-        {'name': 'lift_bridge', 'type': Bridge, 'series_prefix':'lift'} 
+        # {'name': 'lift_bridge', 'type': Bridge, 'series_prefix':'lift'} 
         ]
 SAMPLE_RATE = 50 #hz
 DRAW_RATE = 10 #hz

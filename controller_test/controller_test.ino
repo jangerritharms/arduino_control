@@ -6,9 +6,12 @@
 
 int currentPin = 0;
 int voltagePin = 1;
+int hallPin = 3;
 int motorPin = 9;
 int arm = 1000;
 unsigned long counter=0;
+volatile unsigned long lastPass = 0;
+volatile int rpm = 0;
 int voltage = 0;
 int current = 0;
 int sample_rate = 50;
@@ -31,6 +34,11 @@ float ypr[3];
 int speedvalue = 1000;
 status s;
 String buffer;
+
+void measure_rpm(){
+  rpm = 60/4*1000000/(micros()-lastPass);
+  lastPass = micros();
+}
 
 volatile bool mpuInterrupt = false;
 void dmpDataReady() {
@@ -68,6 +76,9 @@ void setup()
     Serial.begin(115200);
     s = HANDSHAKE_SEND;
     
+    pinMode(hallPin, INPUT_PULLUP);
+    attachInterrupt(1, measure_rpm, CHANGE);
+    
     mpu.initialize();
     mpu.testConnection();
     devStatus = mpu.dmpInitialize();
@@ -95,7 +106,7 @@ void loop()
         esc.detach();
         counter=0;
         delay(100);
-        Serial.println("series counter yaw pitch roll fcnt timer voltage current");
+        Serial.println("series counter rpm yaw pitch roll fcnt timer voltage current");
         s = HANDSHAKE_RECEIVE;
         break;
       case HANDSHAKE_RECEIVE:
@@ -145,6 +156,8 @@ void loop()
         voltage = analogRead(voltagePin);
         current = analogRead(currentPin);
         Serial.print(counter);
+        Serial.print('\t');
+        Serial.print(rpm);
         Serial.print('\t');
         Serial.print(ypr[0] * 180/M_PI);
         Serial.print('\t');
