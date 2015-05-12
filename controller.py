@@ -148,6 +148,7 @@ class ApplicationWindow(QtGui.QMainWindow):
             self.com_status[dev['name']].setText("Unkown")
 
         self.connecter = QtGui.QPushButton("&Connect", self.main_widget)
+        self.save = QtGui.QPushButton("&Save", self.main_widget)
         self.scanner = QtGui.QPushButton("&Rescan", self.main_widget)
 
         # Adding the components to the layout
@@ -181,11 +182,12 @@ class ApplicationWindow(QtGui.QMainWindow):
         layout.addLayout(plot_row)
         control_layout.addWidget(self.scanner, 0, 0, 1, 1)
         control_layout.addWidget(self.connecter, 1, 0, 1, 1)
-        control_layout.addWidget(self.slider, 2, 0, 5, 1)
-        control_layout.addWidget(self.spinbox, 7, 0, 1, 1)
-        control_layout.addWidget(self.pitch_label, 8, 0, 1, 1)
-        control_layout.addWidget(self.yaw_label, 9, 0, 1, 1)
-        control_layout.addWidget(self.roll_label, 10, 0, 1, 1)
+        control_layout.addWidget(self.save, 2, 0, 1, 1)
+        control_layout.addWidget(self.slider, 3, 0, 5, 1)
+        control_layout.addWidget(self.spinbox, 8, 0, 1, 1)
+        control_layout.addWidget(self.pitch_label, 9, 0, 1, 1)
+        control_layout.addWidget(self.yaw_label, 10, 0, 1, 1)
+        control_layout.addWidget(self.roll_label, 11, 0, 1, 1)
         full_layout.addLayout(layout)
         full_layout.addWidget(separator)
         full_layout.addLayout(control_layout)
@@ -256,6 +258,7 @@ class Controller:
 
         # Connecting buttons to functions
         self.window.connecter.clicked.connect(self.connect)
+        self.window.save.clicked.connect(self.save)
         self.window.scanner.clicked.connect(self.scan)
         self.window.slider.valueChanged.connect(self.sendSpeedValue)
         self.window.slider.valueChanged.connect(self.sendSpeedValue)
@@ -274,6 +277,7 @@ class Controller:
 
     def connect(self):
 
+        self.series['time'] = []
         for dev in COMS:
             self.window.com_status[dev['name']].setText("Connecting ...")
 
@@ -409,6 +413,10 @@ class Controller:
             if not self.coms[dev['name']].connected:
                 return
         self.saved = False;
+        if 'yaw' in self.series and 'pitch' in self.series and 'roll' in self.series:
+            self.window.yaw_label.setText("yaw: %f"%self.series['yaw'][-1])
+            self.window.roll_label.setText("roll: %f"%self.series['roll'][-1])
+            self.window.pitch_label.setText("pitch: %f"%self.series['pitch'][-1])
         for i in range(PLOTS):
             if (len(self.series[str(self.window.series_chooser[i].currentText())])<1000):
                 self.window.plotter[i].update_figure(self.series[str(self.window.series_chooser[i].currentText())])
@@ -440,6 +448,18 @@ class Controller:
         for key, value in self.series.items():
             writer.writerow([key, value])
         self.saved = True
+        result = QtGui.QMessageBox.question(self.window, 'Reset', 'Do you want to reset the measurement data?', QtGui.QMessageBox.Yes | QtGui.QMessageBox.No)
+        if result == QtGui.QMessageBox.Yes: self.reset()
+        else: pass
+
+    def reset(self):
+        if 'counter' in self.series:
+            self.serie_adjust['counter'] = self.series['counter'][-1] 
+        try:
+            self.series = self.empty_series
+        except AttributeError:
+            return
+
 
 
 

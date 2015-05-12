@@ -117,7 +117,10 @@ class Arduino(Communicator):
             values = line.split('\t')
             if len(values) == len(self.serie_names):
                 for i, value in enumerate(values):
-                    value = float(value)
+                    try:
+                        value = float(value)
+                    except ValueError:
+                        break
                     if self.serie_names[i] in adjust:
                         series[self.serie_names[i]].append(value-adjust[self.serie_names[i]])
                     else:
@@ -125,6 +128,7 @@ class Arduino(Communicator):
                 break
             else:
                 print line
+        series['time'].append(time())
 
     def send(self, data):
         self.ser.write(("set %i\n"%int(data)).encode())
