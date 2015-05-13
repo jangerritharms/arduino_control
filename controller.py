@@ -149,6 +149,7 @@ class ApplicationWindow(QtGui.QMainWindow):
 
         self.connecter = QtGui.QPushButton("&Connect", self.main_widget)
         self.save = QtGui.QPushButton("&Save", self.main_widget)
+        self.stop = QtGui.QPushButton("&Pause", self.main_widget)
         self.scanner = QtGui.QPushButton("&Rescan", self.main_widget)
 
         # Adding the components to the layout
@@ -183,11 +184,12 @@ class ApplicationWindow(QtGui.QMainWindow):
         control_layout.addWidget(self.scanner, 0, 0, 1, 1)
         control_layout.addWidget(self.connecter, 1, 0, 1, 1)
         control_layout.addWidget(self.save, 2, 0, 1, 1)
-        control_layout.addWidget(self.slider, 3, 0, 5, 1)
-        control_layout.addWidget(self.spinbox, 8, 0, 1, 1)
-        control_layout.addWidget(self.pitch_label, 9, 0, 1, 1)
-        control_layout.addWidget(self.yaw_label, 10, 0, 1, 1)
-        control_layout.addWidget(self.roll_label, 11, 0, 1, 1)
+        control_layout.addWidget(self.stop, 3, 0, 1, 1)
+        control_layout.addWidget(self.slider, 4, 0, 5, 1)
+        control_layout.addWidget(self.spinbox, 9, 0, 1, 1)
+        control_layout.addWidget(self.pitch_label, 10, 0, 1, 1)
+        control_layout.addWidget(self.yaw_label, 11, 0, 1, 1)
+        control_layout.addWidget(self.roll_label, 12, 0, 1, 1)
         full_layout.addLayout(layout)
         full_layout.addWidget(separator)
         full_layout.addLayout(control_layout)
@@ -244,6 +246,7 @@ class Controller:
         self.port_list = {}
         self.series = {}
         self.serie_adjust = {}
+        self.res = False
 
         self.timers = []
         receive_funcs = []
@@ -260,6 +263,7 @@ class Controller:
         self.window.connecter.clicked.connect(self.connect)
         self.window.save.clicked.connect(self.save)
         self.window.scanner.clicked.connect(self.scan)
+        self.window.stop.clicked.connect(self.pause)
         self.window.slider.valueChanged.connect(self.sendSpeedValue)
         self.window.slider.valueChanged.connect(self.sendSpeedValue)
 
@@ -275,7 +279,34 @@ class Controller:
             self.coms['arduino'].send(self.window.spinbox.value())
 
 
+    def pause(self):
+        self.state = deepcopy(self.series)
+
+        self.figure_timer.stop()
+
+        self.window.stop.clicked.disconnect()
+        self.window.stop.clicked.connect(self.continu)
+        self.window.stop.setText("&Continue")
+        
+    def continu(self):
+        if not self.res:
+            self.series = deepcopy(self.state)
+        else:
+            self.series = deepcopy(self.empty_series)
+        self.res = False
+
+        self.figure_timer.start()
+
+        self.window.stop.clicked.disconnect()
+        self.window.stop.clicked.connect(self.pause)
+        self.window.stop.setText("&Pause")
+
     def connect(self):
+        for dev in COMS:
+            for dev2 in COMS:
+                if not dev == dev2 and self.window.port_chooser[dev['name']].currentText() == self.window.port_chooser[dev2['name']].currentText():
+                    print "Same device chosen, use different one"
+                    return
 
         self.series['time'] = []
         for dev in COMS:
@@ -362,6 +393,11 @@ class Controller:
 
 
     def calibrate(self):
+        self.empty_series = deepcopy(self.series)
+        timer = QtCore.QTimer(self.window)
+        timer.timeout.connect(self.update_angles)
+        timer.start(1000/DRAW_RATE)
+
         for i in range(len(self.timers)):
             self.timers[i].start(1000/SAMPLE_RATE)
 
@@ -374,7 +410,6 @@ class Controller:
         while (time()-stime)< 2.0:
             QtGui.QApplication.processEvents()
 
-        self.empty_series = deepcopy(self.series)
         # wait for the accelerometer to stabilize
         if 'pitch' in self.series and 'yaw' in self.series and 'roll' in self.series:
             print "Waiting for the accelerometer to stabilize"
@@ -401,11 +436,17 @@ class Controller:
         if 'counter' in self.series:
             self.serie_adjust['counter'] = self.series['counter'][-1] 
         # Empty the measurement data
-        self.series = self.empty_series
+        self.series = deepcopy(self.empty_series)
         # Set update interval for drawing the data
-        timer = QtCore.QTimer(self.window)
-        timer.timeout.connect(self.update_figure)
-        timer.start(drawInterval)
+        self.figure_timer = QtCore.QTimer(self.window)
+        self.figure_timer.timeout.connect(self.update_figure)
+        self.figure_timer.start(drawInterval)
+
+    def update_angles(self):
+        if 'yaw' in self.series and 'pitch' in self.series and 'roll' in self.series:
+            self.window.yaw_label.setText("yaw: %f"%self.series['yaw'][-1])
+            self.window.roll_label.setText("roll: %f"%self.series['roll'][-1])
+            self.window.pitch_label.setText("pitch: %f"%self.series['pitch'][-1])
 
     def update_figure(self):
         start_time = time()
@@ -413,10 +454,6 @@ class Controller:
             if not self.coms[dev['name']].connected:
                 return
         self.saved = False;
-        if 'yaw' in self.series and 'pitch' in self.series and 'roll' in self.series:
-            self.window.yaw_label.setText("yaw: %f"%self.series['yaw'][-1])
-            self.window.roll_label.setText("roll: %f"%self.series['roll'][-1])
-            self.window.pitch_label.setText("pitch: %f"%self.series['pitch'][-1])
         for i in range(PLOTS):
             if (len(self.series[str(self.window.series_chooser[i].currentText())])<1000):
                 self.window.plotter[i].update_figure(self.series[str(self.window.series_chooser[i].currentText())])
@@ -438,7 +475,7 @@ class Controller:
             else: return
 
     def save(self):
-
+        self.pause()
         import csv
         try:
             fname = QtGui.QFileDialog.getSaveFileName(self.window, 'Save Results', os.path.dirname(os.path.abspath(__file__)))
@@ -455,10 +492,7 @@ class Controller:
     def reset(self):
         if 'counter' in self.series:
             self.serie_adjust['counter'] = self.series['counter'][-1] 
-        try:
-            self.series = self.empty_series
-        except AttributeError:
-            return
+        self.res = True
 
 
 
